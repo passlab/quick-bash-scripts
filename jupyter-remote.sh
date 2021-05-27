@@ -33,6 +33,10 @@ echo -n "HOST [192.39.192.2]: "
 
 read HOST
 
+echo -n "PORT [8889]:"
+
+read PORT
+
 echo -n "Use a docker container? [y/N]: "
 
 read USE_DOCKER_CONTAINER
@@ -49,18 +53,18 @@ if [ "$USE_DOCKER_CONTAINER" == "y" ]; then
 
     trap "cleanupDocker $USERNAME $HOST $DOCKER_NAME" EXIT
 
-    ssh $USERNAME@$HOST "docker run -d -it --rm -p 8889:8889 --name ${DOCKER_NAME} ${DOCKER_IMAGE}"
-    OUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} nohup python3 -m notebook --no-browser --port=8889 --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt")
+    ssh $USERNAME@$HOST "docker run -d -it --rm -p ${PORT}:${PORT} --name ${DOCKER_NAME} ${DOCKER_IMAGE}"
+    OUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} nohup python3 -m notebook --no-browser --port=${PORT} --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt")
     JUPYTER_OUTPUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} python3 -m notebook list")
 else
     trap "cleanup $USERNAME $HOST" EXIT
 
-    OUT=$(ssh $USERNAME@$HOST 'nohup python3 -m notebook --no-browser --port=8889 --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt')
+    OUT=$(ssh $USERNAME@$HOST "nohup python3 -m notebook --no-browser --port=${PORT} --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt")
     JUPYTER_OUTPUT=$(ssh $USERNAME@$HOST 'python3 -m notebook list')
 fi
 
 URL=$(echo $JUPYTER_OUTPUT | sed 's/Currently running servers: //g' | sed 's/ ::.*//g')
-ssh -fNT -L 8889:localhost:8889 $USERNAME@$HOST
+ssh -fNT -L $PORT:localhost:$PORT $USERNAME@$HOST
 
 printf "\n\n${GREEN}Jupyter notebook runnig remotely from ${HOST}${NC}\n"
 printf "\t${GREEN}Open at:${NC} $URL"
