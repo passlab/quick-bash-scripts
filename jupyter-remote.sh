@@ -25,13 +25,15 @@ cleanupDocker() {
     exit $rv
 }
 
-echo -n "USERNAME [root]: "
-
+DEFAULT_USERNAME=$(whoami)
+echo -n "USERNAME [$DEFAULT_USERNAME]: "
 read USERNAME
+USERNAME="${USERNAME:-${DEFAULT_USERNAME}}"
 
-echo -n "HOST [192.39.192.2]: "
-
+DEFAULT_HOST="cci-carina"
+echo -n "HOST [$DEFAULT_HOST]: "
 read HOST
+HOST="${HOST:-${DEFAULT_HOST}}"
 
 echo -n "Use a docker container? [y/N]: "
 
@@ -39,32 +41,44 @@ read USE_DOCKER_CONTAINER
 
 if [ "$USE_DOCKER_CONTAINER" == "y" ]; then
 
-    OUT=$(ssh $USERNAME@$HOST "docker ps -a")
-
+    OUT=$(ssh $USERNAME@$HOST "docker image ls | grep -v \"<none>\" | sed 's/ .*//' | sed '1d'")
     printf "\n${GREEN}Current docker images:\n\n${OUT}\n${NC}"
-
-    echo -n "PORT [8889]:"
-
-    read PORT
-
-    echo -n "DOCKER NAME [brats]: "
-
-    read DOCKER_NAME
-
-    echo -n "DOCKER IMAGE [nvidia/cuda]: "
-
+    DEFAULT_DOCKER_IMAGE=$(printf $OUT | head -n 1)
+    echo -n "DOCKER IMAGE [$DEFAULT_DOCKER_IMAGE]: "
     read DOCKER_IMAGE
+    DOCKER_IMAGE="${DOCKER_IMAGE:-${DEFAULT_DOCKER_IMAGE}}"
 
+    DEFAULT_DOCKER_NAME=$DOCKER_IMAGE
+    echo -n "DOCKER NAME [$DEFAULT_DOCKER_NAME]: "
+    read DOCKER_NAME
+    DOCKER_NAME="${DOCKER_NAME:-${DEFAULT_DOCKER_NAME}}"
+
+    DEFAULT_PORT="8889"
+    echo -n "PORT [$DEFAULT_PORT]: "
+    read PORT
+    PORT="${PORT:-${DEFAULT_PORT}}"
+
+    # Get Directory
+    OUT=$(ssh $USERNAME@$HOST "find . -maxdepth 1 -type d | grep -v '\.\/\.' | sed 's/\.\///g' | sed 's/\.//g' | while read line; do echo \$(pwd)/\$line; done")
+    printf "\n${GREEN}${USERNAME}-${HOST} directories:\n\n${OUT}\n${NC}"
+    DEFAULT_DIR=$(printf $OUT | head -n 1)
+    echo -n "Enter Directory [$DEFAULT_DIR]: "
+    read DIR
+    DIR="${DIR:-${DEFAULT_DIR}}"
+
+    DOCKER_USER=$(ssh $USERNAME@$HOST "docker inspect --format "{{.Config.User}}" $DOCKER_IMAGE")
+    
     trap "cleanupDocker $USERNAME $HOST $DOCKER_NAME" EXIT
 
-    ssh $USERNAME@$HOST "docker run -d -it --rm -p ${PORT}:${PORT} --name ${DOCKER_NAME} ${DOCKER_IMAGE}"
+    ssh $USERNAME@$HOST "docker run -d -it --rm -p ${PORT}:${PORT} --name ${DOCKER_NAME} --security-opt apparmor=unconfined -v ${DIR}:/home/${DOCKER_USER}/development ${DOCKER_IMAGE}"
     OUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} nohup python3 -m notebook --no-browser --port=${PORT} --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt")
     JUPYTER_OUTPUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} python3 -m notebook list")
 else
 
-    echo -n "PORT [8889]:"
-
+    DEFAULT_PORT="8889"
+    echo -n "PORT [$DEFAULT_PORT]: "
     read PORT
+    PORT="${PORT:-${DEFAULT_PORT}}"
 
     trap "cleanup $USERNAME $HOST" EXIT
 
