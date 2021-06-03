@@ -33,16 +33,20 @@ echo -n "HOST [192.39.192.2]: "
 
 read HOST
 
-echo -n "PORT [8889]:"
-
-read PORT
-
 echo -n "Use a docker container? [y/N]: "
 
 read USE_DOCKER_CONTAINER
 
 if [ "$USE_DOCKER_CONTAINER" == "y" ]; then
-    
+
+    OUT=$(ssh $USERNAME@$HOST "docker ps -a")
+
+    printf "\n${GREEN}Current docker images:\n\n${OUT}\n${NC}"
+
+    echo -n "PORT [8889]:"
+
+    read PORT
+
     echo -n "DOCKER NAME [brats]: "
 
     read DOCKER_NAME
@@ -57,6 +61,11 @@ if [ "$USE_DOCKER_CONTAINER" == "y" ]; then
     OUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} nohup python3 -m notebook --no-browser --port=${PORT} --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt")
     JUPYTER_OUTPUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} python3 -m notebook list")
 else
+
+    echo -n "PORT [8889]:"
+
+    read PORT
+
     trap "cleanup $USERNAME $HOST" EXIT
 
     OUT=$(ssh $USERNAME@$HOST "nohup python3 -m notebook --no-browser --port=${PORT} --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt")
