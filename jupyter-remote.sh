@@ -11,16 +11,18 @@ cleanup() {
     printf "${RED}\n\nCLEANING UP JUPYTER REMOTELY!\n\n${NC}"
     rv=$?
     ssh $1@$2 'kill -9 $(cat pid.txt); rm jupyter.log pid.txt'
-    ssh $1@$2 'python3 -m notebook stop 8889'
+    ssh $1@$2 "python3 -m notebook stop ${4}"
     printf "\n\n${GREEN}JUPYTER EXITED!${NC}\n\n"
+    lsof -ti:$3 | xargs kill -9
     exit $rv
 }
 
 cleanupDocker() {
     printf "${RED}\n\nCLEANING UP DOCKER JUPYTER REMOTELY for ${1}@${2} docker ${3}\n\n${NC}"
     rv=$?
-    ssh $1@$2 "docker exec ${3} python3 -m notebook stop 8889"
+    ssh $1@$2 "docker exec ${3} python3 -m notebook stop ${4}"
     ssh $1@$2 "docker container stop ${3}"
+    lsof -ti:$4 | xargs kill -9
     printf "\n\n${GREEN}JUPYTER EXITED!${NC}\n\n"
     exit $rv
 }
@@ -67,10 +69,10 @@ if [ "$USE_DOCKER_CONTAINER" == "y" ]; then
     DIR="${DIR:-${DEFAULT_DIR}}"
 
     DOCKER_USER=$(ssh $USERNAME@$HOST "docker inspect --format "{{.Config.User}}" $DOCKER_IMAGE")
-    
-    trap "cleanupDocker $USERNAME $HOST $DOCKER_NAME" EXIT
 
-    ssh $USERNAME@$HOST "docker run -d -it --rm -p ${PORT}:${PORT} --name ${DOCKER_NAME} --security-opt apparmor=unconfined -v ${DIR}:/home/${DOCKER_USER}/development ${DOCKER_IMAGE}"
+    trap "cleanupDocker $USERNAME $HOST $DOCKER_NAME $PORT" EXIT
+
+    ssh $USERNAME@$HOST "docker run -d -it --rm -u 0 --gpus all -p ${PORT}:${PORT} --name ${DOCKER_NAME} --security-opt apparmor=unconfined -v ${DIR}:/home/${DOCKER_USER}/development ${DOCKER_IMAGE}"
     OUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} nohup python3 -m notebook --no-browser --port=${PORT} --ip=0.0.0.0 --allow-root > jupyter.log & echo $!> pid.txt")
     JUPYTER_OUTPUT=$(ssh $USERNAME@$HOST "docker exec ${DOCKER_NAME} python3 -m notebook list")
 else
